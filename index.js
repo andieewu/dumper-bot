@@ -43,6 +43,7 @@ function saveUserSettings(settings) {
 }
 
 const pendingStickerConfirmations = new Map();
+const pendingImageConfirmations = new Map();
 
 client.on("message", async (message) => {
   const chat = await message.getChat();
@@ -98,6 +99,44 @@ client.on("message", async (message) => {
     }
   }
 
+  if (pendingImageConfirmations.size > 0) {
+    const confirmation = userMessage;
+    const pendingEntry = [...pendingImageConfirmations.values()].find(
+      (entry) => entry.userId === message.from
+    );
+
+    if (pendingEntry) {
+      if (confirmation === "y" || confirmation === "ya") {
+        const media = pendingEntry.media;
+        if (!media) {
+          await replyWithTyping(chat, message, "❌ Gagal mengunduh media.");
+        } else {
+          await chat.sendStateTyping();
+          await new Promise((r) => setTimeout(r, 1000));
+          await chat.sendMessage(media, { sendMediaAsSticker: true });
+          await chat.clearState();
+        }
+      } else if (confirmation === "n" || confirmation === "tidak") {
+        await replyWithTyping(chat, message, "👍 Oke, tidak dijadikan stiker.");
+      } else {
+        await replyWithTyping(
+          chat,
+          message,
+          "❓ Pilih Y untuk ya atau N untuk tidak."
+        );
+        return;
+      }
+
+      for (const [key, value] of pendingImageConfirmations.entries()) {
+        if (value.userId === message.from) {
+          pendingImageConfirmations.delete(key);
+          break;
+        }
+      }
+      return;
+    }
+  }
+
   if (message.type === "sticker") {
     const isMentioned = message.mentionedIds.includes(botNumber);
     const isReplyToBot =
@@ -127,6 +166,37 @@ client.on("message", async (message) => {
       "🤔 Apakah stiker ini ingin dijadikan gambar? (Y/N)"
     );
     return;
+  }
+
+  if (message.type === "image") {
+    const isMentioned = message.mentionedIds.includes(botNumber);
+    const isReplyToBot =
+      message.hasQuotedMsg &&
+      (await message
+        .getQuotedMessage()
+        .then((q) => q.from === botNumber)
+        .catch(() => false));
+
+    if (!chat.isGroup || isMentioned || isReplyToBot) {
+      const media = await message.downloadMedia();
+      if (!media) {
+        await replyWithTyping(chat, message, "❌ Gagal mengunduh gambar.");
+        return;
+      }
+
+      pendingImageConfirmations.set(message.id._serialized, {
+        userId: message.from,
+        chatId: message.from,
+        media: media,
+      });
+
+      await replyWithTyping(
+        chat,
+        message,
+        "🤔 Apakah gambar ini ingin dijadikan stiker? (Y/N)"
+      );
+      return;
+    }
   }
 
   if (userMessage === "/tosticker") {
