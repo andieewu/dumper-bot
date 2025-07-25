@@ -1,8 +1,15 @@
 const fs = require("fs");
 const path = "./.wwebjs_auth";
-const { Client, LocalAuth, MessageMedia } = require("whatsapp-web.js");
+const { Client, LocalAuth } = require("whatsapp-web.js");
 const qrcode = require("qrcode-terminal");
+const axios = require("axios");
 const puppeteer = require("puppeteer");
+
+// dapatkan api key dari open router
+const OPENROUTER_API_KEY =
+  "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";
+
+const userHistories = {};
 
 const client = new Client({
   authStrategy: new LocalAuth(),
@@ -22,412 +29,100 @@ client.on("ready", () => {
   console.log("✅ Bot siap!");
 });
 
-async function replyWithTyping(chat, message, replyText, delay = 1000) {
-  try {
-    if (!chat || !message || !replyText) {
-      console.warn("⛔ replyWithTyping: chat/message kosong!");
-      return;
-    }
-
-    await chat.sendStateTyping();
-    await new Promise((resolve) => setTimeout(resolve, delay));
-
-    if (typeof message.reply === "function") {
-      await message.reply(replyText);
-    } else if (message.from && typeof message.from === "string") {
-      try {
-        await client.sendMessage(message.from, replyText);
-      } catch (err) {
-        console.error("❌ Gagal kirim pesan langsung:", err);
-      }
-    }
-
-    await chat.clearState();
-  } catch (err) {
-    console.error("❌ Gagal di replyWithTyping:", err);
-  }
-}
-
-const userSettingsFile = "./user-settings.json";
-
-function loadUserSettings() {
-  if (fs.existsSync(userSettingsFile)) {
-    return JSON.parse(fs.readFileSync(userSettingsFile));
-  }
-  return {};
-}
-
-function saveUserSettings(settings) {
-  fs.writeFileSync(userSettingsFile, JSON.stringify(settings, null, 2));
-}
-
-const pendingStickerConfirmations = new Map();
-const pendingImageConfirmations = new Map();
-
 client.on("message", async (message) => {
+  console.log(`📩 Pesan dari ${message.from}: ${message.body}`);
+  const userId = message.from;
+  const userMessage = message.body.toLowerCase();
+
   const chat = await message.getChat();
-  const rawMessage = message.body?.trim() || "";
-  let userMessage = rawMessage.toLowerCase();
-  const botNumber = client.info.wid._serialized;
-
-  console.log(
-    `📩 Pesan masuk dari ${message.from}: [${message.type}] ${
-      rawMessage || "(media/sticker)"
-    }`
-  );
-
-  if (pendingStickerConfirmations.size > 0) {
-    const confirmation = userMessage;
-    const pendingEntry = [...pendingStickerConfirmations.values()].find(
-      (entry) => entry.userId === message.from
-    );
-
-    if (pendingEntry) {
-      if (confirmation === "y" || confirmation === "ya") {
-        const media = pendingEntry.media;
-        if (!media) {
-          await replyWithTyping(chat, message, "❌ Gagal mengunduh media.");
-        } else {
-          await chat.sendStateTyping();
-          await new Promise((r) => setTimeout(r, 1000));
-          await chat.sendMessage(media, { caption: "🖼️ Ini gambarnya ya!" });
-          await chat.clearState();
-        }
-      } else if (confirmation === "n" || confirmation === "tidak") {
-        await replyWithTyping(
-          chat,
-          message,
-          "👍 Oke, stiker tidak dijadikan gambar."
-        );
-      } else {
-        await replyWithTyping(
-          chat,
-          message,
-          "❓ Pilih Y untuk ya atau N untuk tidak."
-        );
-        return;
-      }
-
-      for (const [key, value] of pendingStickerConfirmations.entries()) {
-        if (value.userId === message.from) {
-          pendingStickerConfirmations.delete(key);
-          break;
-        }
-      }
-      return;
-    }
-  }
-
-  if (pendingImageConfirmations.size > 0) {
-    const confirmation = userMessage;
-    const pendingEntry = [...pendingImageConfirmations.values()].find(
-      (entry) => entry.userId === message.from
-    );
-
-    if (pendingEntry) {
-      if (confirmation === "y" || confirmation === "ya") {
-        const media = pendingEntry.media;
-        if (!media) {
-          await replyWithTyping(chat, message, "❌ Gagal mengunduh media.");
-        } else {
-          await chat.sendStateTyping();
-          await new Promise((r) => setTimeout(r, 1000));
-          await chat.sendMessage(media, { sendMediaAsSticker: true });
-          await chat.clearState();
-        }
-      } else if (confirmation === "n" || confirmation === "tidak") {
-        await replyWithTyping(chat, message, "👍 Oke, tidak dijadikan stiker.");
-      } else {
-        await replyWithTyping(
-          chat,
-          message,
-          "❓ Pilih Y untuk ya atau N untuk tidak."
-        );
-        return;
-      }
-
-      for (const [key, value] of pendingImageConfirmations.entries()) {
-        if (value.userId === message.from) {
-          pendingImageConfirmations.delete(key);
-          break;
-        }
-      }
-      return;
-    }
-  }
-
-  if (message.type === "sticker") {
-    const isMentioned = message.mentionedIds.includes(botNumber);
-    const isReplyToBot =
-      message.hasQuotedMsg &&
-      (await message
-        .getQuotedMessage()
-        .then((q) => q.from === botNumber)
-        .catch(() => false));
-
-    if (chat.isGroup && !isMentioned && !isReplyToBot) return;
-
-    const media = await message.downloadMedia();
-    if (!media) {
-      await replyWithTyping(chat, message, "❌ Gagal mengunduh stiker.");
-      return;
-    }
-
-    pendingStickerConfirmations.set(message.id._serialized, {
-      userId: message.from,
-      chatId: message.from,
-      media: media,
-    });
-
-    await replyWithTyping(
-      chat,
-      message,
-      "🤔 Apakah stiker ini ingin dijadikan gambar? (Y/N)"
-    );
-    return;
-  }
-
-  if (message.type === "image") {
-    const isMentioned = message.mentionedIds.includes(botNumber);
-    const isReplyToBot =
-      message.hasQuotedMsg &&
-      (await message
-        .getQuotedMessage()
-        .then((q) => q?.from === botNumber)
-        .catch(() => false));
-
-    if (!chat.isGroup || isMentioned || isReplyToBot) {
-      const media = await message.downloadMedia();
-      if (!media) {
-        await replyWithTyping(chat, message, "❌ Gagal mengunduh gambar.");
-        return;
-      }
-
-      pendingImageConfirmations.set(message.id._serialized, {
-        userId: message.from,
-        chatId: message.from,
-        media: media,
-      });
-
-      await replyWithTyping(
-        chat,
-        message,
-        "🤔 Apakah gambar ini ingin dijadikan stiker? (Y/N)"
-      );
-      return;
-    }
-  }
-
-  if (userMessage === "/tosticker") {
-    if (message.hasMedia) {
-      const media = await message.downloadMedia();
-      if (!media) {
-        await replyWithTyping(chat, message, "❌ Gagal mengunduh media.");
-        return;
-      }
-      await chat.sendStateTyping();
-      await new Promise((r) => setTimeout(r, 1000));
-      await chat.sendMessage(media, { sendMediaAsSticker: true });
-      await chat.clearState();
-      return;
-    } else if (message.hasQuotedMsg) {
-      const quoted = await message.getQuotedMessage();
-      if (
-        quoted.hasMedia &&
-        quoted._data.mimetype.startsWith("image/") &&
-        !quoted._data.mimetype.includes("webp")
-      ) {
-        const media = await quoted.downloadMedia();
-        if (!media) {
-          await replyWithTyping(chat, message, "❌ Gagal mengunduh gambar.");
-          return;
-        }
-        await chat.sendStateTyping();
-        await new Promise((r) => setTimeout(r, 1000));
-        await chat.sendMessage(media, { sendMediaAsSticker: true });
-        await chat.clearState();
-        return;
-      } else {
-        await replyWithTyping(
-          chat,
-          message,
-          "⚠️ Reply ke *gambar* untuk dijadikan stiker!"
-        );
-        return;
-      }
-    } else {
-      await replyWithTyping(
-        chat,
-        message,
-        "⚠️ Kirim atau reply ke *gambar* untuk dijadikan stiker!"
-      );
-      return;
-    }
-  }
-
-  if (userMessage === "/toimage") {
-    if (message.hasQuotedMsg) {
-      const quoted = await message.getQuotedMessage();
-      if (quoted.hasMedia && quoted._data.mimetype === "image/webp") {
-        const media = await quoted.downloadMedia();
-        if (!media) {
-          await replyWithTyping(chat, message, "❌ Gagal mengunduh stiker.");
-          return;
-        }
-        await chat.sendStateTyping();
-        await new Promise((r) => setTimeout(r, 1000));
-        await chat.sendMessage(media, { caption: "🖼️ Ini gambarnya ya!" });
-        await chat.clearState();
-        return;
-      } else {
-        await replyWithTyping(
-          chat,
-          message,
-          "⚠️ Reply ke *stiker* untuk dijadikan gambar!"
-        );
-        return;
-      }
-    } else {
-      await replyWithTyping(
-        chat,
-        message,
-        "⚠️ Reply ke *stiker* untuk dijadikan gambar!"
-      );
-      return;
-    }
-  }
 
   if (chat.isGroup) {
+    const botNumber = client.info.wid._serialized;
     const isMentioned = message.mentionedIds.includes(botNumber);
+
     const isReplyToBot =
       message.hasQuotedMsg &&
       (await message
         .getQuotedMessage()
         .then((q) => q.from === botNumber)
         .catch(() => false));
-    const isCommand = userMessage.startsWith("!");
+
+    const isCommand = message.body.startsWith("!");
 
     if (!isMentioned && !isReplyToBot && !isCommand) {
       console.log("⏭️ Abaikan pesan grup tanpa mention atau reply ke bot.");
       return;
     }
-
-    if (isMentioned) {
-      const botNameRegex = /@\w+/g;
-      const messageWithoutMentions = rawMessage
-        .replace(botNameRegex, "")
-        .trim();
-      userMessage = messageWithoutMentions.toLowerCase();
-
-      if (userMessage === "") {
-        await replyWithTyping(
-          chat,
-          message,
-          "Yo! 😎 Ada yang manggil DumperBot? Ketik */menu* buat lihat daftar perintah."
-        );
-        return;
-      }
-    }
   }
 
-  // USER SETTINGS & COMMANDS
-  const userId = message.from;
-  let userSettings = loadUserSettings();
-  let timezone = userSettings[userId]?.timezone || "Asia/Jakarta";
+  // logout untuk restart bot
+  if (userMessage === "!logout") {
+    try {
+      await message.reply("🚪 Proses logout dimulai...");
 
-  switch (userMessage) {
-    case "/menu":
-      await message.reply(
-        `📋 *MENU DumperBot*\n\n` +
-          `👋 /halo       – Sapa bot\n` +
-          `👨‍💻 /creator    – Info pembuat bot\n` +
-          `🕒 /waktu      – Lihat waktu sekarang\n` +
-          `🖼️ /tosticker  – Ubah gambar jadi stiker\n` +
-          `🔁 /toimage    – Ubah stiker jadi gambar`
-      );
-      break;
+      await client.destroy();
+      console.log("🔌 Client WhatsApp dimatikan.");
 
-    case "/halo":
-      await replyWithTyping(
-        chat,
-        message,
-        "Yo! 😎 Ada yang bisa DumperBot bantuin?"
-      );
-      break;
-
-    case "/creator":
-      await replyWithTyping(
-        chat,
-        message,
-        `👨‍💻 *Tentang DumperBot*\n` +
-          `Dibuat oleh *Mas Dika* yang super kece! 😎\n\n` +
-          `🔗 *Instagram*: https://www.instagram.com/andieewu\n` +
-          `💻 *GitHub*   : https://github.com/andieewu`
-      );
-      break;
-
-    case "/waktu":
-      const waktu = new Date().toLocaleString("id-ID", { timeZone: timezone });
-      await replyWithTyping(
-        chat,
-        message,
-        `🕒 Zona waktu kamu: *${timezone}*\nWaktu sekarang: ${waktu}`
-      );
-      break;
-
-    case rawMessage.toLowerCase().startsWith("/setlokasi")
-      ? rawMessage.toLowerCase()
-      : "":
-      const parts = rawMessage.split(" ");
-      if (parts.length >= 2) {
-        const tz = parts[1];
+      setTimeout(() => {
         try {
-          new Date().toLocaleString("id-ID", { timeZone: tz });
-          if (!userSettings[userId]) userSettings[userId] = {};
-          userSettings[userId].timezone = tz;
-          saveUserSettings(userSettings);
-          await replyWithTyping(
-            chat,
-            message,
-            `✅ Zona waktu disetel ke *${tz}*`
+          if (fs.existsSync(path)) {
+            fs.rmSync(path, { recursive: true, force: true });
+            console.log("🗑️ Folder auth berhasil dihapus.");
+          }
+          message.reply(
+            "✅ Kamu telah logout. Silakan restart bot untuk login ulang."
           );
+          process.exit();
         } catch (err) {
-          await replyWithTyping(
-            chat,
-            message,
-            `❌ Zona waktu tidak valid. Contoh: /setlokasi Asia/Jakarta`
+          console.error("❌ Gagal menghapus folder auth:", err);
+          message.reply(
+            "⚠️ Gagal menghapus sesi login. Silakan coba secara manual."
           );
         }
-      } else {
-        await replyWithTyping(
-          chat,
-          message,
-          `❗ Gunakan format: */setlokasi Asia/Jakarta*`
-        );
-      }
-      break;
+      }, 2000);
+    } catch (err) {
+      console.error("❌ Gagal logout:", err);
+      await message.reply("❌ Gagal logout. Coba lagi nanti.");
+    }
+    return;
+  }
 
-    case "/logout":
-      await replyWithTyping(chat, message, "🚪 Logout dimulai...");
-      try {
-        await client.destroy();
-        if (fs.existsSync(path)) {
-          fs.rmSync(path, { recursive: true, force: true });
-        }
-        console.log("✅ Client dimatikan dan auth folder dihapus.");
-        process.exit();
-      } catch (err) {
-        console.error("❌ Gagal logout:", err);
-        await replyWithTyping(chat, message, "❌ Gagal logout.");
-      }
-      break;
+  if (!userHistories[userId]) {
+    userHistories[userId] = [
+      {
+        role: "system",
+        content:
+          "Kamu adalah DumperBot, sebuah bot WhatsApp yang ramah, santai, dan komunikatif. Sapa pengguna dengan gaya santai dan bersahabat, namun tetap sopan dan menyenangkan. Kamu dibuat oleh Andika Wisnumurti. Jika seseorang bertanya siapa pembuatmu, jawab bahwa kamu dibuat oleh Mas Andika — seorang developer berbakat dan kreatif. Jika mereka bertanya lebih lanjut tentang Mas Dika atau ingin menghubunginya, berikan tautan ke Instagram: @andieewu atau GitHub: andieewu. Namun, jangan memberikan informasi ini jika tidak diminta. Jika seseorang bertanya tentang pasangan Mas Andika, jawab bahwa pasangannya bernama Khanza Tsabitha Salsabilla, atau sering dipanggil Acha — seorang wanita yang cantik, baik hati, dan menyenangkan.",
+      },
+    ];
+  }
 
-    default:
-      await replyWithTyping(
-        chat,
-        message,
-        `Hai *DumperBot* disini!\nKetik */menu* buat lihat daftar perintah.`
-      );
+  userHistories[userId].push({ role: "user", content: message.body });
+
+  try {
+    const response = await axios.post(
+      "https://openrouter.ai/api/v1/chat/completions",
+      {
+        model: "deepseek/deepseek-chat-v3-0324:free", // model
+        messages: userHistories[userId],
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+          "Content-Type": "application/json",
+          "HTTP-Referer": "https://whatsapp-bot.local",
+          "X-Title": "whatsapp-bot",
+        },
+      }
+    );
+
+    const reply = response.data.choices[0].message.content;
+    userHistories[userId].push({ role: "assistant", content: reply });
+
+    await message.reply(reply);
+  } catch (error) {
+    console.error("❌ Error dari OpenRouter:", error.message);
+    await message.reply("Maaf, sepertinya sistem saya sedang ada kendala!");
   }
 });
 
