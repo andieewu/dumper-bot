@@ -23,10 +23,29 @@ client.on("ready", () => {
 });
 
 async function replyWithTyping(chat, message, replyText, delay = 1000) {
-  await chat.sendStateTyping();
-  await new Promise((resolve) => setTimeout(resolve, delay));
-  await message.reply(replyText);
-  await chat.clearState();
+  try {
+    if (!chat || !message || !replyText) {
+      console.warn("⛔ replyWithTyping: chat/message kosong!");
+      return;
+    }
+
+    await chat.sendStateTyping();
+    await new Promise((resolve) => setTimeout(resolve, delay));
+
+    if (typeof message.reply === "function") {
+      await message.reply(replyText);
+    } else if (message.from && typeof message.from === "string") {
+      try {
+        await client.sendMessage(message.from, replyText);
+      } catch (err) {
+        console.error("❌ Gagal kirim pesan langsung:", err);
+      }
+    }
+
+    await chat.clearState();
+  } catch (err) {
+    console.error("❌ Gagal di replyWithTyping:", err);
+  }
 }
 
 const userSettingsFile = "./user-settings.json";
@@ -174,7 +193,7 @@ client.on("message", async (message) => {
       message.hasQuotedMsg &&
       (await message
         .getQuotedMessage()
-        .then((q) => q.from === botNumber)
+        .then((q) => q?.from === botNumber)
         .catch(() => false));
 
     if (!chat.isGroup || isMentioned || isReplyToBot) {
@@ -342,7 +361,7 @@ client.on("message", async (message) => {
         message,
         `👨‍💻 *Tentang DumperBot*\n` +
           `Dibuat oleh *Mas Dika* yang super kece! 😎\n\n` +
-          `🔗 *Instagram*: https://www.instagram.com/andieew_\n` +
+          `🔗 *Instagram*: https://www.instagram.com/andieewu\n` +
           `💻 *GitHub*   : https://github.com/andieewu`
       );
       break;
