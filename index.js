@@ -1,4 +1,3 @@
-require("dotenv").config();
 const fs = require("fs");
 const path = "./.wwebjs_auth";
 const { Client, LocalAuth } = require("whatsapp-web.js");
