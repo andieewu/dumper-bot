@@ -3,3 +3,4 @@ node_modules/
 .wwebjs_cache/
 open.txt
 user-settings.json
+.env

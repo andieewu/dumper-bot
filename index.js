@@ -1,3 +1,4 @@
+require("dotenv").config();
 const fs = require("fs");
 const path = "./.wwebjs_auth";
 const { Client, LocalAuth } = require("whatsapp-web.js");
@@ -5,9 +6,9 @@ const qrcode = require("qrcode-terminal");
 const axios = require("axios");
 const puppeteer = require("puppeteer");
 
-// dapatkan api key dari open router
-const OPENROUTER_API_KEY =
-  "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";
+// dapatkan api key dari open routern
+require("dotenv").config();
+const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 
 const userHistories = {};
 
