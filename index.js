@@ -1,8 +1,13 @@
 const fs = require("fs");
 const path = "./.wwebjs_auth";
 const { Client, LocalAuth, MessageMedia } = require("whatsapp-web.js");
-const qrcode = require("qrcode-terminal");
+// const qrcode = require("qrcode-terminal");
 const puppeteer = require("puppeteer");
+const QRCode = require("qrcode");
+const express = require("express");
+const app = express();
+
+let latestQR = "";
 
 const client = new Client({
   authStrategy: new LocalAuth(),
@@ -13,11 +18,23 @@ const client = new Client({
   },
 });
 
-client.on("qr", (qr) => {
-  console.log("🔐 Scan QR Code di WhatsApp kamu...");
-  qrcode.generate(qr, { small: true });
-});
+client.on("qr", async (qr) => {
+  latestQR = qr;
+  console.log("🔐 QR Code tersedia di: http://localhost:3000/qr");
 
+  // Simpan QR sebagai file gambar
+  QRCode.toFile(
+    "./qr.png",
+    qr,
+    {
+      color: { dark: "#000000", light: "#ffffff" },
+    },
+    (err) => {
+      if (err) console.error("❌ Gagal generate QR:", err);
+      else console.log("✅ QR code disimpan sebagai 'qr.png'");
+    }
+  );
+});
 client.on("ready", () => {
   console.log("✅ Bot siap!");
 });
@@ -429,6 +446,31 @@ client.on("message", async (message) => {
         `Hai *DumperBot* disini!\nKetik */menu* buat lihat daftar perintah.`
       );
   }
+});
+
+// Server Express untuk menampilkan QR
+app.use(express.static("."));
+
+app.get("/qr", (req, res) => {
+  if (latestQR) {
+    res.send(`
+      <html>
+        <body style="text-align:center; font-family:sans-serif;">
+          <h2>Scan QR WhatsApp</h2>
+          <img src="https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(
+            latestQR
+          )}&size=300x300" />
+          <p>Scan dengan WhatsApp Web</p>
+        </body>
+      </html>
+    `);
+  } else {
+    res.send("<p>QR belum tersedia. Tunggu bot aktif dulu.</p>");
+  }
+});
+
+app.listen(3000, () => {
+  console.log("🌐 QR Web Server aktif di http://localhost:3000/qr");
 });
 
 client.initialize();
