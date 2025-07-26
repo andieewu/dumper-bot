@@ -2,5 +2,6 @@ node_modules/
 .wwebjs_auth/
 .wwebjs_cache/
 open.txt
+open2.txt
 user-settings.json
 .env
