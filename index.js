@@ -103,7 +103,7 @@ client.on("message", async (message) => {
     const response = await axios.post(
       "https://openrouter.ai/api/v1/chat/completions",
       {
-        model: "deepseek/deepseek-chat-v3-0324:free", // model
+        model: "mistralai/mistral-7b-instruct:free", // model
         messages: userHistories[userId],
       },
       {
@@ -121,8 +121,18 @@ client.on("message", async (message) => {
 
     await message.reply(reply);
   } catch (error) {
-    console.error("❌ Error dari OpenRouter:", error.message);
-    await message.reply("Maaf, sepertinya sistem saya sedang ada kendala!");
+    if (error.response) {
+      console.error(
+        "❌ Error dari OpenRouter:",
+        error.response.status,
+        error.response.data
+      );
+    } else {
+      console.error("❌ Error:", error.message);
+    }
+    await message.reply(
+      "⚠️ Maaf, sistem sedang mengalami kendala. Silakan coba lagi nanti."
+    );
   }
 });
 
