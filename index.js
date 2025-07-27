@@ -340,7 +340,7 @@ client.on("message", async (message) => {
         await replyWithTyping(
           chat,
           message,
-          "Yo! 😎 Ada yang manggil DumperBot? Ketik */menu* buat lihat daftar perintah."
+          "Yo! 😎 Ada yang manggil ZumeBot? Ketik */menu* buat lihat daftar perintah."
         );
         return;
       }
@@ -355,7 +355,7 @@ client.on("message", async (message) => {
   switch (userMessage) {
     case "/menu":
       await message.reply(
-        `📋 *MENU DumperBot*\n\n` +
+        `📋 *MENU ZumeBot*\n\n` +
           `👋 /halo       – Sapa bot\n` +
           `👨‍💻 /creator    – Info pembuat bot\n` +
           `🕒 /waktu      – Lihat waktu sekarang\n` +
@@ -368,7 +368,7 @@ client.on("message", async (message) => {
       await replyWithTyping(
         chat,
         message,
-        "Yo! 😎 Ada yang bisa DumperBot bantuin?"
+        "Yo! 😎 Ada yang bisa ZumeBot bantuin?"
       );
       break;
 
@@ -376,7 +376,7 @@ client.on("message", async (message) => {
       await replyWithTyping(
         chat,
         message,
-        `👨‍💻 *Tentang DumperBot*\n` +
+        `👨‍💻 *Tentang ZumeBot*\n` +
           `Dibuat oleh *Mas Dika* yang super kece! 😎\n\n` +
           `🔗 *Instagram*: https://www.instagram.com/andieewu\n` +
           `💻 *GitHub*   : https://github.com/andieewu`
@@ -443,12 +443,11 @@ client.on("message", async (message) => {
       await replyWithTyping(
         chat,
         message,
-        `Hai *DumperBot* disini!\nKetik */menu* buat lihat daftar perintah.`
+        `Hai *ZumeBot* disini!\nKetik */menu* buat lihat daftar perintah.`
       );
   }
 });
 
-// Server Express untuk menampilkan QR
 app.use(express.static("."));
 
 app.get("/qr", (req, res) => {
